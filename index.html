@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MorseChat</title>    
+  <link rel="icon" href="favicon.ico" type="image/x-icon" />
+  <style>
+    :root{
+      --bg:#0f1220;
+      --panel:#161a2f;
+      --panel-2:#1e2443;
+      --accent:#7aa2ff;
+      --accent-2:#5de4c7;
+      --ink:#e9ecff;
+      --muted:#8d93b2;
+      --danger:#ff6b6b;
+      --ok:#7af59a;
+      --shadow: 0 8px 20px rgba(0,0,0,.3);
+      --radius:12px;
+    }
+    * { box-sizing: border-box }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: radial-gradient(600px 400px at 20% -10%, #1a1e36 0%, #0f1220 55%) no-repeat fixed;
+      color: var(--ink);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      letter-spacing: .1px;
+      font-size: 14px;
+    }
+
+    .app {
+      max-width: 100%;
+      margin: 10px;
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, rgba(22,26,47,.8) 100%);
+      border: 1px solid rgba(122,162,255,.15);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card h2 {
+      margin: 0;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(122,162,255,.14);
+      font-size: 14px;
+      font-weight: 650;
+      color: #cdd6ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2 small { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .card .body { padding: 14px; }
+    .row { display: flex; gap: 8px; align-items: stretch; }
+    .col { flex: 1; }
+    .muted { color: var(--muted); }
+
+    /* Chat area */
+    .chat {
+      height: 60vh;
+      max-height: 400px;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(400px 300px at 120% 0%, rgba(122,162,255,.05) 0, transparent 70%),
+        linear-gradient(180deg, rgba(255,255,255,.02), transparent 100%);
+    }
+    .messages {
+      flex: 1;
+      overflow: auto;
+      padding: 12px 12px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      scroll-behavior: smooth;
+    }
+    .msg {
+      max-width: 80%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      line-height: 1.3;
+      word-wrap: break-word;
+      background: var(--panel-2);
+      border: 1px solid rgba(122,162,255,.13);
+      font-size: 13px;
+    }
+    .msg.me {
+      margin-left: auto;
+      background: linear-gradient(180deg, rgba(122,162,255,.18), rgba(122,162,255,.08));
+      border-color: rgba(122,162,255,.35);
+    }
+    .msg .meta {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 5px;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .composer {
+      border-top: 1px solid rgba(122,162,255,.14);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0) 50%);
+    }
+    .display {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      background: rgba(30,36,67,.7);
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(122,162,255,.16);
+    }
+    .display .label { font-size: 11px; color: var(--muted); }
+    .display .live {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      padding: 3px 6px;
+      border-radius: 6px;
+      background: rgba(122,162,255,.12);
+      border: 1px dashed rgba(122,162,255,.35);
+      min-width: 36px;
+      text-align: center;
+    }
+    .display .text {
+      padding: 3px 6px;
+      border-radius: 6px;
+      background: rgba(93,228,199,.08);
+      border: 1px solid rgba(93,228,199,.25);
+      min-height: 24px;
+      flex: 1;
+    }
+    .display .status { font-size: 11px; color: #b9c4ff; }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .morseBtn {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      background: radial-gradient(100px 100px at 30% 20%, rgba(122,162,255,.25), transparent), linear-gradient(180deg, #2a3266, #232a55);
+      border: 2px solid rgba(122,162,255,.45);
+      border-bottom-color: rgba(122,162,255,.7);
+      color: #e9ecff;
+      font-weight: 700;
+      box-shadow: inset 0 -4px 8px rgba(0,0,0,.25), 0 6px 16px rgba(0,0,0,.3);
+      transition: transform .04s ease, filter .12s ease, background .2s ease, border-color .2s ease;
+    }
+    .morseBtn:active, .morseBtn.active {
+      transform: translateY(1px) scale(.995);
+      filter: brightness(1.05);
+    }
+    .morseBtn.dot {
+      background: radial-gradient(100px 100px at 30% 20%, rgba(122,162,255,.4), transparent), linear-gradient(180deg, #2a3266, #232a55);
+      border-color: var(--accent);
+    }
+    .morseBtn.dash {
+      background: radial-gradient(100px 100px at 30% 20%, rgba(93,228,199,.4), transparent), linear-gradient(180deg, #2a3266, #232a55);
+      border-color: var(--accent-2);
+    }
+
+    .act {
+      border: 1px solid rgba(122,162,255,.25);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: center;
+      flex: 1;
+      transition: background .2s ease;
+    }
+    .act:hover {
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+    }
+    .act:disabled { opacity: .55; cursor: not-allowed; }
+
+    .action-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      justify-content: space-between;
+    }
+
+    .meter {
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(122,162,255,.12);
+      overflow: hidden;
+      border: 1px solid rgba(122,162,255,.18);
+    }
+    .meter > div {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width .05s linear;
+    }
+
+    /* Legend */
+    .legendGrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .legendItem {
+      background: rgba(30,36,67,.6);
+      border: 1px solid rgba(122,162,255,.16);
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .legendItem code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: rgba(122,162,255,.12);
+      border: 1px dashed rgba(122,162,255,.3);
+      padding: 2px 4px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-card {
+      background: linear-gradient(180deg, var(--panel) 0%, rgba(22,26,47,.8) 100%);
+      border: 1px solid rgba(122,162,255,.15);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      max-width: 300px;
+      width: 90%;
+    }
+    .modal-card h2 {
+      margin: 0 0 12px;
+      padding: 0;
+      border: none;
+      font-size: 14px;
+      font-weight: 650;
+      color: #cdd6ff;
+    }
+    .modal-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--panel-2);
+      border: 1px solid rgba(122,162,255,.25);
+      border-radius: 8px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .modal-button {
+      margin-top: 12px;
+      width: 100%;
+      border: 1px solid rgba(122,162,255,.25);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+    }
+    .modal-button:hover {
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Chat -->
+    <section class="card chat" aria-label="Conversa">
+      <h2>🔐 MorseChat <small>— Rede social sigilosa</small></h2>
+
+      <div id="messages" class="messages" aria-live="polite" aria-relevant="additions">
+      </div>
+
+      <div class="composer">
+        <div class="display" role="group" aria-label="Estado de digitação em Morse">
+          <span class="label">Símbolos: </span>
+          <span id="liveSymbols" class="live" aria-live="polite">—</span>
+          <span class="label">Texto: </span>
+          <span id="typedText" class="text" aria-live="polite"></span>
+          <span id="status" class="status">Pronto</span>
+        </div>
+        <div class="meter" aria-hidden="true"><div id="meterBar"></div></div>
+        <div class="controls">
+          <div class="display left-timer">
+            <span class="label">Tempo: </span>
+            <span id="gapTime" class="live" aria-live="polite">—</span>
+          </div>
+          <button id="morseKey" class="morseBtn" aria-pressed="false" aria-label="Tecla Morse (pressione e solte para ponto ou traço)"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Legend -->
+    <section class="card">
+      <h2>📖 Legenda — Código Morse</h2>
+      <div class="body">
+        <div id="legend" class="legendGrid" aria-label="Tabela de código Morse"></div>
+        <div class="action-row">
+          <button id="changeName" class="act" title="Alterar Nome"><span>✏️</span> Nome</button>
+          <button id="deleteLast" class="act" title="Apagar Última Mensagem"><span>🗑️</span> Apagar</button>
+          <button id="sendBravo" class="act" title="Enviar Câmbio Bravo"><span>📡</span> Câmbio</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal for username -->
+  <div id="nameModal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>Digite seu nome para o chat:</h2>
+      <input id="nameInput" class="modal-input" type="text" placeholder="Seu nome" aria-label="Nome de usuário">
+      <button id="confirmName" class="modal-button">Confirmar</button>
+    </div>
+  </div>
+
+  <!-- Firebase Compatibility SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDd-i47C51sseWaMtZbBBdPbObjP1_kYzU",
+      authDomain: "minimaltag-28769.firebaseapp.com",
+      projectId: "minimaltag-28769",
+      storageBucket: "minimaltag-28769.firebasestorage.app",
+      messagingSenderId: "645337589970",
+      appId: "1:645337589970:web:7ad772693f6f05fceaa50b"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // =========================
+    // Mapeamento Morse A–Z, 0–9
+    // =========================
+    const MORSE_MAP = {
+      A: ".-",    B: "-...",  C: "-.-.",  D: "-..",   E: ".",     F: "..-.",
+      G: "--.",   H: "....",  I: "..",    J: ".---",  K: "-.-",   L: ".-..",
+      M: "--",    N: "-.",    O: "---",   P: ".--.",  Q: "--.-",  R: ".-.",
+      S: "...",   T: "-",     U: "..-",   V: "...-",  W: ".--",   X: "-..-",
+      Y: "-.--",  Z: "--..",
+      "0": "-----","1": ".----","2": "..---","3": "...--","4": "....-",
+      "5": ".....","6": "-....","7": "--...","8": "---..","9": "----."
+    };
+    // Reverse map for decoding
+    const REVERSE = Object.fromEntries(Object.entries(MORSE_MAP).map(([k,v]) => [v, k]));
+
+    // =========================
+    // Elementos de UI
+    // =========================
+    const elMessages   = document.getElementById('messages');
+    const elMorseKey   = document.getElementById('morseKey');
+    const elLive       = document.getElementById('liveSymbols');
+    const elText       = document.getElementById('typedText');
+    const elStatus     = document.getElementById('status');
+    const elMeterBar   = document.getElementById('meterBar');
+    const elGapTime    = document.getElementById('gapTime');
+    const legendGrid   = document.getElementById('legend');
+    const nameModal    = document.getElementById('nameModal');
+    const nameInput    = document.getElementById('nameInput');
+    const confirmName  = document.getElementById('confirmName');
+    const changeName   = document.getElementById('changeName');
+    const deleteLast   = document.getElementById('deleteLast');
+    const sendBravo    = document.getElementById('sendBravo');
+
+    // =========================
+    // Parâmetros de tempo (ms)
+    // =========================
+    let DOT_MAX_MS    = 250;
+    let GAP_LETTER_MS = 800;
+    let GAP_WORD_MS   = 3000;
+    let GAP_SEND_MS   = 6000;
+
+    // =========================
+    // Estado de digitação
+    // =========================
+    let pressStart = 0;
+    let holdTimer  = null;
+    let gapTimer   = null;
+    let currentSymbols = "";
+    let typed = "";
+    let isHolding = false;
+    let lastInputTime = 0;
+    let userName = localStorage.getItem('morseChatUserName') || null;
+    let lastMessageId = null; // Para rastrear a última mensagem enviada pelo usuário
+
+    // Beep opcional para feedback
+    let audioCtx = null;
+    function beep(freq = 700, ms = 80) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g);
+        g.connect(audioCtx.destination);
+        o.type = "sine";
+        o.frequency.value = freq;
+        g.gain.value = 0.07;
+        o.start();
+        setTimeout(() => { o.stop(); }, ms);
+      } catch (e) {}
+    }
+
+    // =========================
+    // Lógica de entrada Morse
+    // =========================
+    function startPress() {
+      isHolding = true;
+      pressStart = performance.now();
+      elMorseKey.classList.add('active');
+      elMorseKey.setAttribute('aria-pressed', 'true');
+      elStatus.textContent = "Segurando…";
+      if (gapTimer) { clearTimeout(gapTimer); gapTimer = null; }
+      holdTimer = setInterval(() => {
+        const dur = performance.now() - pressStart;
+        const isDash = dur > DOT_MAX_MS;
+        elMorseKey.classList.remove('dot', 'dash');
+        elMorseKey.classList.add(isDash ? 'dash' : 'dot');
+        const pct = Math.min(100, (dur / DOT_MAX_MS) * 50 + (dur > DOT_MAX_MS ? (dur - DOT_MAX_MS) / (GAP_LETTER_MS - DOT_MAX_MS) * 50 : 0));
+        elMeterBar.style.width = pct + "%";
+      }, 16);
+    }
+
+    function endPress() {
+      if (!isHolding) return;
+      isHolding = false;
+      elMorseKey.classList.remove('active', 'dot', 'dash');
+      elMorseKey.setAttribute('aria-pressed', 'false');
+      const duration = performance.now() - pressStart;
+      if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+      requestAnimationFrame(() => elMeterBar.style.width = "0%");
+      const symbol = duration <= DOT_MAX_MS ? "." : "-";
+      currentSymbols += symbol;
+      elLive.textContent = currentSymbols;
+      elStatus.textContent = `Capturado ${symbol === "." ? "· ponto" : "— traço"} (${Math.round(duration)}ms)`;
+      beep(symbol === "." ? 850 : 600, symbol === "." ? 55 : 100);
+      lastInputTime = performance.now();
+      scheduleGapTimers();
+    }
+
+    function scheduleGapTimers() {
+      if (gapTimer) clearTimeout(gapTimer);
+      gapTimer = setTimeout(() => {
+        commitLetter();
+        gapTimer = setTimeout(() => {
+          addSpace();
+          gapTimer = setTimeout(() => {
+            sendMessage();
+          }, GAP_SEND_MS - GAP_WORD_MS);
+        }, GAP_WORD_MS - GAP_LETTER_MS);
+      }, GAP_LETTER_MS);
+    }
+
+    function commitLetter() {
+      if (!currentSymbols) return;
+      const up = REVERSE[currentSymbols];
+      const letter = up ? up : "�";
+      typed += letter;
+      elText.textContent = typed;
+      elStatus.textContent = up
+        ? `Letra “${letter}” ( ${currentSymbols} )`
+        : `Sequência desconhecida (${currentSymbols})`;
+      elLive.textContent = "—";
+      currentSymbols = "";
+    }
+
+    function addSpace() {
+      if (currentSymbols.length) return;
+      if (!typed.endsWith(" ") && typed.length > 0) {
+        typed += " ";
+        elText.textContent = typed;
+        elStatus.textContent = "Espaço";
+      }
+    }
+
+    // =========================
+    // Enviar para Firebase
+    // =========================
+    async function sendMessage(text = null) {
+      if (currentSymbols) commitLetter();
+      const msg = text || typed.trim();
+      if (!msg) {
+        elStatus.textContent = "Nada para enviar.";
+        return;
+      }
+      try {
+        const docRef = await db.collection('messages').add({
+          text: msg,
+          userName: userName || 'Usuário',
+          me: true,
+          time: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        lastMessageId = docRef.id; // Armazena o ID da última mensagem enviada
+        typed = "";
+        elText.textContent = "";
+        elStatus.textContent = "Pronto";
+      } catch (error) {
+        elStatus.textContent = "Erro ao enviar mensagem.";
+        console.error("Erro ao enviar mensagem:", error);
+      }
+    }
+
+    // =========================
+    // Apagar última mensagem
+    // =========================
+    async function deleteLastMessage() {
+      if (!lastMessageId) {
+        elStatus.textContent = "Nenhuma mensagem para apagar.";
+        return;
+      }
+      try {
+        await db.collection('messages').doc(lastMessageId).delete();
+        elStatus.textContent = "Última mensagem apagada.";
+        lastMessageId = null; // Reseta o ID após apagar
+      } catch (error) {
+        elStatus.textContent = "Erro ao apagar mensagem.";
+        console.error("Erro ao apagar mensagem:", error);
+      }
+    }
+
+    // =========================
+    // Enviar Câmbio Bravo
+    // =========================
+    async function sendCambioBravo() {
+      await sendMessage("CÂMBIO BRAVO");
+    }
+
+    // =========================
+    // Carregar e exibir mensagens do Firebase
+    // =========================
+    function pushMessage({ text, userName, me, time }) {
+      const timeStr = time ? time.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const div = document.createElement('div');
+      div.className = 'msg' + (me ? ' me' : '');
+      div.innerHTML = `
+        <div>${escapeHtml(text)}</div>
+        <div class="meta">
+          <span>${timeStr}</span>
+          <span>${escapeHtml(userName)}</span>
+        </div>`;
+      elMessages.appendChild(div);
+      elMessages.scrollTop = elMessages.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
+    }
+
+    // =========================
+    // Escutar mensagens do Firebase
+    // =========================
+    db.collection('messages')
+      .orderBy('time', 'asc')
+      .onSnapshot(snapshot => {
+        elMessages.innerHTML = ''; // Limpar mensagens atuais
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          pushMessage({
+            text: data.text,
+            userName: data.userName,
+            me: data.userName === userName,
+            time: data.time
+          });
+          // Atualiza o lastMessageId se a mensagem for do usuário
+          if (data.userName === userName) {
+            lastMessageId = doc.id;
+          }
+        });
+      }, error => {
+        console.error("Erro ao carregar mensagens:", error);
+        elStatus.textContent = "Erro ao carregar mensagens.";
+      });
+
+    // =========================
+    // Eventos de input
+    // =========================
+    elMorseKey.addEventListener('contextmenu', e => e.preventDefault());
+    elMorseKey.addEventListener('pointerdown', e => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      startPress();
+      elMorseKey.setPointerCapture(e.pointerId);
+    });
+    elMorseKey.addEventListener('pointerup', e => { endPress(); });
+    elMorseKey.addEventListener('pointercancel', () => { if (isHolding) endPress(); });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        startPress();
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        endPress();
+      }
+    });
+
+    // =========================
+    // Eventos dos novos botões
+    // =========================
+    deleteLast.addEventListener('click', deleteLastMessage);
+    sendBravo.addEventListener('click', sendCambioBravo);
+
+    // =========================
+    // Timer update
+    // =========================
+    setInterval(() => {
+      if (isHolding || lastInputTime === 0) {
+        elGapTime.textContent = '—';
+        return;
+      }
+      const elapsed = Math.min((performance.now() - lastInputTime) / 1000, GAP_SEND_MS / 1000);
+      elGapTime.textContent = elapsed.toFixed(1) + 's';
+    }, 100);
+
+    // =========================
+    // Construir legenda
+    // =========================
+    (function renderLegend() {
+      const entries = Object.entries(MORSE_MAP)
+        .sort((a, b) => {
+          const isAlpha = c => /^[A-Z]$/.test(c);
+          const isDigit = c => /^[0-9]$/.test(c);
+          const [ka, kb] = [a[0], b[0]];
+          const rank = k => isAlpha(k) ? 0 : isDigit(k) ? 1 : 2;
+          if (rank(ka) !== rank(kb)) return rank(ka) - rank(kb);
+          return ka.localeCompare(kb);
+        });
+
+      for (const [char, code] of entries) {
+        const item = document.createElement('div');
+        item.className = 'legendItem';
+        item.innerHTML = `<strong>${char}</strong> <code>${code.replaceAll('.', '·').replaceAll('-', '—')}</code>`;
+        legendGrid.appendChild(item);
+      }
+    })();
+
+    // =========================
+    // Fechar letra ao sair da aba
+    // =========================
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && currentSymbols) commitLetter();
+    });
+
+    // Handle username
+    function showNameModal() {
+      nameInput.value = userName || '';
+      nameModal.style.display = 'flex';
+      nameInput.focus();
+    }
+
+    if (!userName) {
+      showNameModal();
+    }
+
+    confirmName.addEventListener('click', () => {
+      userName = nameInput.value.trim() || 'Usuário';
+      localStorage.setItem('morseChatUserName', userName);
+      nameModal.style.display = 'none';
+    });
+
+    nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        confirmName.click();
+      }
+    });
+
+    changeName.addEventListener('click', showNameModal);
+  </script>
+</body>
+</html>
