@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f1220">
   <title>MorseChat</title>    
   <link rel="icon" href="favicon.ico" type="image/x-icon" />
   <style>
@@ -27,6 +28,7 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
       letter-spacing: .1px;
       font-size: 14px;
+      user-select: none; /* Impede seleção de texto */
     }
 
     .app {
@@ -79,7 +81,6 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      scroll-behavior: smooth;
     }
     .msg {
       max-width: 80%;
@@ -288,6 +289,7 @@
       border-radius: 8px;
       color: var(--ink);
       font-size: 13px;
+      user-select: auto; /* Permite seleção apenas no input do modal */
     }
     .modal-button {
       margin-top: 12px;
@@ -325,11 +327,7 @@
         </div>
         <div class="meter" aria-hidden="true"><div id="meterBar"></div></div>
         <div class="controls">
-          <div class="display left-timer">
-            <span class="label">Tempo: </span>
-            <span id="gapTime" class="live" aria-live="polite">—</span>
-          </div>
-          <button id="morseKey" class="morseBtn" aria-pressed="false" aria-label="Tecla Morse (pressione e solte para ponto ou traço)"></button>
+          <button id="morseKey" class="morseBtn" aria-pressed="false" aria-label="Tecla Morse (pressione e solte para ponto, traço ou espaço)"></button>
         </div>
       </div>
     </section>
@@ -399,7 +397,6 @@
     const elText       = document.getElementById('typedText');
     const elStatus     = document.getElementById('status');
     const elMeterBar   = document.getElementById('meterBar');
-    const elGapTime    = document.getElementById('gapTime');
     const legendGrid   = document.getElementById('legend');
     const nameModal    = document.getElementById('nameModal');
     const nameInput    = document.getElementById('nameInput');
@@ -411,10 +408,9 @@
     // =========================
     // Parâmetros de tempo (ms)
     // =========================
-    let DOT_MAX_MS    = 250;
-    let GAP_LETTER_MS = 800;
-    let GAP_WORD_MS   = 3000;
-    let GAP_SEND_MS   = 6000;
+    let DOT_MAX_MS    = 250;    // Max duration for a dot
+    let SPACE_HOLD_MS = 1500;   // 1.5 seconds hold for space
+    let GAP_LETTER_MS = 800;    // Time to commit a letter
 
     // =========================
     // Estado de digitação
@@ -428,6 +424,8 @@
     let lastInputTime = 0;
     let userName = localStorage.getItem('morseChatUserName') || null;
     let lastMessageId = null; // Para rastrear a última mensagem enviada pelo usuário
+    let lastWasSpace = false; // Track if the last action was a space
+    let spaceCount = 0; // Contador para espaços consecutivos
 
     // Beep opcional para feedback
     let audioCtx = null;
@@ -458,10 +456,16 @@
       if (gapTimer) { clearTimeout(gapTimer); gapTimer = null; }
       holdTimer = setInterval(() => {
         const dur = performance.now() - pressStart;
-        const isDash = dur > DOT_MAX_MS;
+        const isDash = dur > DOT_MAX_MS && dur < SPACE_HOLD_MS;
+        const isSpace = dur >= SPACE_HOLD_MS;
         elMorseKey.classList.remove('dot', 'dash');
-        elMorseKey.classList.add(isDash ? 'dash' : 'dot');
-        const pct = Math.min(100, (dur / DOT_MAX_MS) * 50 + (dur > DOT_MAX_MS ? (dur - DOT_MAX_MS) / (GAP_LETTER_MS - DOT_MAX_MS) * 50 : 0));
+        if (isSpace) {
+          elMorseKey.classList.add('dot'); // Visual feedback for space
+          elStatus.textContent = "Espaço em " + ((SPACE_HOLD_MS - dur) / 1000).toFixed(1) + "s";
+        } else {
+          elMorseKey.classList.add(isDash ? 'dash' : 'dot');
+        }
+        const pct = Math.min(100, (dur / SPACE_HOLD_MS) * 100);
         elMeterBar.style.width = pct + "%";
       }, 16);
     }
@@ -474,25 +478,36 @@
       const duration = performance.now() - pressStart;
       if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
       requestAnimationFrame(() => elMeterBar.style.width = "0%");
-      const symbol = duration <= DOT_MAX_MS ? "." : "-";
-      currentSymbols += symbol;
-      elLive.textContent = currentSymbols;
-      elStatus.textContent = `Capturado ${symbol === "." ? "· ponto" : "— traço"} (${Math.round(duration)}ms)`;
-      beep(symbol === "." ? 850 : 600, symbol === "." ? 55 : 100);
-      lastInputTime = performance.now();
-      scheduleGapTimers();
+
+      if (duration >= SPACE_HOLD_MS) {
+        // Add space if held for 1.5 seconds
+        addSpace();
+        lastWasSpace = true;
+        spaceCount++;
+        if (spaceCount >= 2) {
+          sendMessage();
+          spaceCount = 0; // Resetar contador após envio
+        }
+        lastInputTime = performance.now();
+        scheduleGapTimers();
+      } else {
+        // Register dot or dash
+        const symbol = duration <= DOT_MAX_MS ? "." : "-";
+        currentSymbols += symbol;
+        elLive.textContent = currentSymbols;
+        elStatus.textContent = `Capturado ${symbol === "." ? "· ponto" : "— traço"} (${Math.round(duration)}ms)`;
+        beep(symbol === "." ? 850 : 600, symbol === "." ? 55 : 100);
+        lastWasSpace = false;
+        spaceCount = 0; // Resetar contador se não for espaço
+        lastInputTime = performance.now();
+        scheduleGapTimers();
+      }
     }
 
     function scheduleGapTimers() {
       if (gapTimer) clearTimeout(gapTimer);
       gapTimer = setTimeout(() => {
         commitLetter();
-        gapTimer = setTimeout(() => {
-          addSpace();
-          gapTimer = setTimeout(() => {
-            sendMessage();
-          }, GAP_SEND_MS - GAP_WORD_MS);
-        }, GAP_WORD_MS - GAP_LETTER_MS);
       }, GAP_LETTER_MS);
     }
 
@@ -507,6 +522,7 @@
         : `Sequência desconhecida (${currentSymbols})`;
       elLive.textContent = "—";
       currentSymbols = "";
+      spaceCount = 0; // Resetar contador ao cometer uma letra
     }
 
     function addSpace() {
@@ -515,6 +531,7 @@
         typed += " ";
         elText.textContent = typed;
         elStatus.textContent = "Espaço";
+        beep(1000, 50); // Distinct beep for space
       }
     }
 
@@ -539,6 +556,8 @@
         typed = "";
         elText.textContent = "";
         elStatus.textContent = "Pronto";
+        lastWasSpace = false; // Reset space flag after sending
+        spaceCount = 0; // Resetar contador após envio
       } catch (error) {
         elStatus.textContent = "Erro ao enviar mensagem.";
         console.error("Erro ao enviar mensagem:", error);
@@ -584,7 +603,7 @@
           <span>${escapeHtml(userName)}</span>
         </div>`;
       elMessages.appendChild(div);
-      elMessages.scrollTop = elMessages.scrollHeight;
+      elMessages.scrollTo({ top: elMessages.scrollHeight, behavior: 'auto' });
     }
 
     function escapeHtml(str) {
@@ -643,22 +662,10 @@
     });
 
     // =========================
-    // Eventos dos novos botões
+    // Eventos dos botões
     // =========================
     deleteLast.addEventListener('click', deleteLastMessage);
     sendBravo.addEventListener('click', sendCambioBravo);
-
-    // =========================
-    // Timer update
-    // =========================
-    setInterval(() => {
-      if (isHolding || lastInputTime === 0) {
-        elGapTime.textContent = '—';
-        return;
-      }
-      const elapsed = Math.min((performance.now() - lastInputTime) / 1000, GAP_SEND_MS / 1000);
-      elGapTime.textContent = elapsed.toFixed(1) + 's';
-    }, 100);
 
     // =========================
     // Construir legenda
