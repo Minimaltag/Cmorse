@@ -4,8 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1d490c">
-<meta name="msapplication-navbutton-color" content="#1d490c">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">  
   <title>MorseChat</title>    
   <link rel="icon" href="favicon.ico" type="image/x-icon" />
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -336,6 +334,16 @@
     .modal-button:hover {
       background: linear-gradient(180deg, rgba(0,255,0,.08), rgba(0,255,0,.04));
     }
+    .instructions-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .instructions-list li {
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <link rel="manifest" href="manifest.json">
@@ -357,7 +365,7 @@
         <div class="controls">
           <div class="left">
             <span class="label">Símbolos: </span>
-            <span id="liveSymbols" class="live" aria-live="polite">—</span>
+            <span id="liveSymbols" class="live" aria-live="polite">+</span>
           </div>
           <button id="morseKey" class="morseBtn" aria-pressed="false" aria-label="Tecla Morse (pressione e solte para ponto, traço ou espaço)"></button>
         </div>
@@ -371,7 +379,7 @@
         <div class="action-row">
           <button id="changeName" class="act" title="Alterar Nome"><span></span> Nome</button>
           <button id="deleteLast" class="act" title="Apagar Última Mensagem"><span></span> Apagar</button>
-          <button id="sendBravo" class="act" title="Enviar Câmbio Bravo"><span></span> Câmbio</button>
+          <button id="showInstructions" class="act" title="Instruções de Uso"><span></span> Instruções</button>
         </div>
       </div>
     </section>
@@ -383,6 +391,22 @@
       <h2>Digite seu nome para o chat:</h2>
       <input id="nameInput" class="modal-input" type="text" placeholder="Seu nome" aria-label="Nome de usuário">
       <button id="confirmName" class="modal-button">Confirmar</button>
+    </div>
+  </div>
+
+  <!-- Modal for instructions -->
+  <div id="instructionsModal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>Instruções de Uso do Morse</h2>
+      <ul class="instructions-list">
+        <li>- Pressione curto para ponto (.)</li>
+        <li>- Pressione longo para traço (-)</li>
+        <li>- Segure ainda mais para adicionar espaço</li>
+        <li>- Espere um momento para confirmar a letra</li>
+        <li>- Dois espaços consecutivos enviam a mensagem</li>
+        <li>- Use a tecla de espaço no teclado ou o botão circular</li>
+      </ul>
+      <button id="closeInstructions" class="modal-button">Fechar</button>
     </div>
   </div>
 
@@ -404,9 +428,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // =========================
-    // Mapeamento Morse A–Z, 0–9
-    // =========================
+    // MORSE_MAP and REVERSE
     const MORSE_MAP = {
       A: ".-",    B: "-...",  C: "-.-.",  D: "-..",   E: ".",     F: "..-.",
       G: "--.",   H: "....",  I: "..",    J: ".---",  K: "-.-",   L: ".-..",
@@ -416,48 +438,42 @@
       "0": "-----","1": ".----","2": "..---","3": "...--","4": "....-",
       "5": ".....","6": "-....","7": "--...","8": "---..","9": "----."
     };
-    // Reverse map for decoding
     const REVERSE = Object.fromEntries(Object.entries(MORSE_MAP).map(([k,v]) => [v, k]));
 
-    // =========================
-    // Elementos de UI
-    // =========================
-    const elMessages   = document.getElementById('messages');
-    const elMorseKey   = document.getElementById('morseKey');
-    const elLive       = document.getElementById('liveSymbols');
-    const elText       = document.getElementById('typedText');
-    const elMeterBar   = document.getElementById('meterBar');
-    const legendGrid   = document.getElementById('legend');
-    const nameModal    = document.getElementById('nameModal');
-    const nameInput    = document.getElementById('nameInput');
-    const confirmName  = document.getElementById('confirmName');
-    const changeName   = document.getElementById('changeName');
-    const deleteLast   = document.getElementById('deleteLast');
-    const sendBravo    = document.getElementById('sendBravo');
+    // UI Elements
+    const elMessages = document.getElementById('messages');
+    const elMorseKey = document.getElementById('morseKey');
+    const elLive = document.getElementById('liveSymbols');
+    const elText = document.getElementById('typedText');
+    const elMeterBar = document.getElementById('meterBar');
+    const legendGrid = document.getElementById('legend');
+    const nameModal = document.getElementById('nameModal');
+    const nameInput = document.getElementById('nameInput');
+    const confirmName = document.getElementById('confirmName');
+    const changeName = document.getElementById('changeName');
+    const deleteLast = document.getElementById('deleteLast');
+    const showInstructions = document.getElementById('showInstructions');
+    const instructionsModal = document.getElementById('instructionsModal');
+    const closeInstructions = document.getElementById('closeInstructions');
 
-    // =========================
-    // Parâmetros de tempo (ms)
-    // =========================
-    let DOT_MAX_MS    = 250;    // Max duration for a dot
-    let SPACE_HOLD_MS = 900;   // 900 thousandth hold for space
-    let GAP_LETTER_MS = 800;    // Time to commit a letter
+    // Time Parameters (ms)
+    let DOT_MAX_MS = 250;
+    let SPACE_HOLD_MS = 1100;
+    let GAP_LETTER_MS = 900;
 
-    // =========================
-    // Estado de digitação
-    // =========================
+    // Typing State
     let pressStart = 0;
-    let holdTimer  = null;
-    let gapTimer   = null;
+    let holdTimer = null;
+    let gapTimer = null;
     let currentSymbols = "";
     let typed = "";
     let isHolding = false;
     let lastInputTime = 0;
     let userName = localStorage.getItem('morseChatUserName') || null;
-    let lastMessageId = null; // Para rastrear a última mensagem enviada pelo usuário
-    let lastWasSpace = false; // Track if the last action was a space
-    let spaceCount = 0; // Contador para espaços consecutivos
+    let lastWasSpace = false;
+    let spaceCount = 0;
 
-    // Beep opcional para feedback
+    // Audio Context for Beeps
     let audioCtx = null;
     function beep(freq = 700, ms = 80) {
       try {
@@ -474,9 +490,7 @@
       } catch (e) {}
     }
 
-    // =========================
-    // Lógica de entrada Morse
-    // =========================
+    // Morse Input Logic
     function startPress() {
       isHolding = true;
       pressStart = performance.now();
@@ -489,7 +503,7 @@
         const isSpace = dur >= SPACE_HOLD_MS;
         elMorseKey.classList.remove('dot', 'dash');
         if (isSpace) {
-          elMorseKey.classList.add('dot'); // Visual feedback for space
+          elMorseKey.classList.add('dot');
         } else {
           elMorseKey.classList.add(isDash ? 'dash' : 'dot');
         }
@@ -508,24 +522,22 @@
       requestAnimationFrame(() => elMeterBar.style.width = "0%");
 
       if (duration >= SPACE_HOLD_MS) {
-        // Add space if held for 1.5 seconds
         addSpace();
         lastWasSpace = true;
         spaceCount++;
         if (spaceCount >= 2) {
           sendMessage();
-          spaceCount = 0; // Resetar contador após envio
+          spaceCount = 0;
         }
         lastInputTime = performance.now();
         scheduleGapTimers();
       } else {
-        // Register dot or dash
         const symbol = duration <= DOT_MAX_MS ? "." : "-";
         currentSymbols += symbol;
         elLive.textContent = currentSymbols;
         beep(symbol === "." ? 850 : 600, symbol === "." ? 55 : 100);
         lastWasSpace = false;
-        spaceCount = 0; // Resetar contador se não for espaço
+        spaceCount = 0;
         lastInputTime = performance.now();
         scheduleGapTimers();
       }
@@ -544,9 +556,9 @@
       const letter = up ? up : "�";
       typed += letter;
       elText.textContent = typed;
-      elLive.textContent = "—";
+      elLive.textContent = "+";
       currentSymbols = "";
-      spaceCount = 0; // Resetar contador ao cometer uma letra
+      spaceCount = 0;
     }
 
     function addSpace() {
@@ -554,13 +566,11 @@
       if (!typed.endsWith(" ") && typed.length > 0) {
         typed += " ";
         elText.textContent = typed;
-        beep(1000, 50); // Distinct beep for space
+        beep(1000, 50);
       }
     }
 
-    // =========================
-    // Enviar para Firebase
-    // =========================
+    // Send Message to Firebase
     async function sendMessage(text = null) {
       if (currentSymbols) commitLetter();
       const msg = text || typed.trim();
@@ -574,41 +584,32 @@
           me: true,
           time: firebase.firestore.FieldValue.serverTimestamp()
         });
-        lastMessageId = docRef.id; // Armazena o ID da última mensagem enviada
+        // Play WWII-themed send sound (simulated short radio burst)
+        beep(500, 200); // Low freq for radio feel
+        setTimeout(() => beep(700, 100), 200);
         typed = "";
         elText.textContent = "";
-        lastWasSpace = false; // Reset space flag after sending
-        spaceCount = 0; // Resetar contador após envio
+        lastWasSpace = false;
+        spaceCount = 0;
       } catch (error) {
         console.error("Erro ao enviar mensagem:", error);
       }
     }
 
-    // =========================
-    // Apagar última mensagem
-    // =========================
+    // Delete Last Message (most recent overall)
     async function deleteLastMessage() {
-      if (!lastMessageId) {
-        return;
-      }
       try {
-        await db.collection('messages').doc(lastMessageId).delete();
-        lastMessageId = null; // Reseta o ID após apagar
+        const snapshot = await db.collection('messages').orderBy('time', 'desc').limit(1).get();
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          await doc.ref.delete();
+        }
       } catch (error) {
         console.error("Erro ao apagar mensagem:", error);
       }
     }
 
-    // =========================
-    // Enviar Câmbio Bravo
-    // =========================
-    async function sendCambioBravo() {
-      await sendMessage("CÂMBIO BRAVO");
-    }
-
-    // =========================
-    // Carregar e exibir mensagens do Firebase
-    // =========================
+    // Load and Display Messages from Firebase
     function pushMessage({ text, userName, me, time, remaining }) {
       const timeStr = time ? time.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const div = document.createElement('div');
@@ -628,13 +629,11 @@
       return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
     }
 
-    // =========================
-    // Escutar mensagens do Firebase
-    // =========================
+    // Listen to Messages from Firebase
     db.collection('messages')
       .orderBy('time', 'asc')
       .onSnapshot(snapshot => {
-        elMessages.innerHTML = ''; // Limpar mensagens atuais
+        elMessages.innerHTML = '';
         snapshot.forEach(doc => {
           const data = doc.data();
           const time = data.time ? data.time.toMillis() : Date.now();
@@ -655,18 +654,12 @@
             time: data.time,
             remaining: remainingStr
           });
-          // Atualiza o lastMessageId se a mensagem for do usuário
-          if (data.userName === userName) {
-            lastMessageId = doc.id;
-          }
         });
       }, error => {
         console.error("Erro ao carregar mensagens:", error);
       });
 
-    // =========================
-    // Eventos de input
-    // =========================
+    // Input Events
     elMorseKey.addEventListener('contextmenu', e => e.preventDefault());
     elMorseKey.addEventListener('pointerdown', e => {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -690,15 +683,16 @@
       }
     });
 
-    // =========================
-    // Eventos dos botões
-    // =========================
+    // Button Events
     deleteLast.addEventListener('click', deleteLastMessage);
-    sendBravo.addEventListener('click', sendCambioBravo);
+    showInstructions.addEventListener('click', () => {
+      instructionsModal.style.display = 'flex';
+    });
+    closeInstructions.addEventListener('click', () => {
+      instructionsModal.style.display = 'none';
+    });
 
-    // =========================
-    // Construir legenda
-    // =========================
+    // Render Legend
     (function renderLegend() {
       const entries = Object.entries(MORSE_MAP)
         .sort((a, b) => {
@@ -718,14 +712,12 @@
       }
     })();
 
-    // =========================
-    // Fechar letra ao sair da aba
-    // =========================
+    // Close Letter on Visibility Change
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && currentSymbols) commitLetter();
     });
 
-    // Handle username
+    // Handle Username
     function showNameModal() {
       nameInput.value = userName || '';
       nameModal.style.display = 'flex';
